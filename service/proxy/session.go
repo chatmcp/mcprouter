@@ -13,7 +13,7 @@ type SSESession struct {
 	done     chan struct{}     // done channel
 	messages chan string       // event queue
 	key      string            // client request key
-	Config   *mcpserver.Config // server run command
+	config   *mcpserver.Config // server run command
 	client   *mcpclient.StdioClient
 }
 
@@ -24,7 +24,7 @@ func NewSSESession(w *SSEWriter, key string, config *mcpserver.Config) *SSESessi
 		done:     make(chan struct{}),
 		messages: make(chan string, 100), // store messages
 		key:      key,
-		Config:   config,
+		config:   config,
 		client:   nil,
 	}
 }
@@ -36,12 +36,12 @@ func (s *SSESession) Key() string {
 
 // Command returns the command of the session
 func (s *SSESession) Command() string {
-	return s.Config.CMD
+	return s.config.CMD
 }
 
 // ServerConfig returns the config of the session
 func (s *SSESession) ServerConfig() *mcpserver.Config {
-	return s.Config
+	return s.config
 }
 
 // SetClient sets the client of the session
