@@ -37,8 +37,8 @@ func Messages(c echo.Context) error {
 	client := ctx.GetClient(sseKey)
 
 	if client == nil {
-		command := session.Command()
-		_client, err := mcpclient.NewStdioClient(command)
+		config := session.ServerConfig()
+		_client, err := mcpclient.NewStdioClient(config)
 		if err != nil {
 			fmt.Printf("connect to mcp server failed: %v\n", err)
 			return ctx.JSONRPCError(jsonrpc.ErrorProxyError, request.ID)

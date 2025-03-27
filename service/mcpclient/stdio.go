@@ -2,36 +2,69 @@ package mcpclient
 
 import (
 	"bufio"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
 	"sync"
+	"sync/atomic"
+
+	"github.com/chatmcp/mcprouter/service/mcpserver"
+	"github.com/google/uuid"
 
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
 	"github.com/tidwall/gjson"
 )
 
+// 在文件开头添加全局 ID 生成器
+var (
+	clientPool = sync.Map{}
+	globalID   atomic.Uint64
+	idMapping  = sync.Map{} // 全局ID到原始ID的映射
+)
+
+// 添加获取全局唯一 ID 的函数
+func getGlobalID() uint64 {
+	globalID.Add(1)
+	return globalID.Load()
+}
+
+func getGlobalStringId() string {
+	return uuid.New().String()
+}
+
 // StdioClient is a client that uses stdin and stdout to communicate with the backend mcp server.
 type StdioClient struct {
+	config        *mcpserver.Config
 	cmd           *exec.Cmd
 	stdin         io.WriteCloser
 	stdout        *bufio.Reader
 	stderr        *bufio.Reader
-	done          chan struct{}         // client closed signal
-	messages      map[int64]chan []byte // stdout messages channel
+	done          chan struct{} // client closed signal
+	messages      sync.Map      // stdout messages channel
 	mu            sync.RWMutex
 	notifications []func(message []byte) // notification handlers
 	nmu           sync.RWMutex
 	err           chan error // stderr message
+
 }
 
 // NewStdioClient creates a new StdioClient.
-func NewStdioClient(command string) (*StdioClient, error) {
+func NewStdioClient(config *mcpserver.Config) (*StdioClient, error) {
+	// check if  the server can  share process
+	if config.ShareProcess {
+		//md5 config.CMD
+		hash := md5.Sum([]byte(config.CMD))
+		if v, ok := clientPool.Load(hash); ok {
+			return v.(*StdioClient), nil
+		}
+	}
+
 	cmd := exec.Command(
 		"sh",
 		"-c",
-		command,
+		config.CMD,
 	)
 
 	stdin, err := cmd.StdinPipe()
@@ -50,12 +83,13 @@ func NewStdioClient(command string) (*StdioClient, error) {
 	}
 
 	client := &StdioClient{
+		config:   config,
 		cmd:      cmd,
 		stdin:    stdin,
 		stdout:   bufio.NewReader(stdout),
 		stderr:   bufio.NewReader(stderr),
 		done:     make(chan struct{}),
-		messages: make(map[int64]chan []byte),
+		messages: sync.Map{},
 		err:      make(chan error, 1),
 	}
 
@@ -87,12 +121,13 @@ func NewStdioClient(command string) (*StdioClient, error) {
 	ready := make(chan struct{})
 	go func() {
 		close(ready)
+		hash := md5.Sum([]byte(config.CMD))
+		clientPool.Store(hash, client)
 		client.listen()
 	}()
 	<-ready
 
-	fmt.Printf("mcp server running with command: %s\n", command)
-
+	fmt.Printf("mcp server running with command: %s\n", config.CMD)
 	return client, nil
 }
 
@@ -135,22 +170,29 @@ func (c *StdioClient) listen() {
 			}
 
 			// not notification message
-			id := msg.Get("id").Int()
-
-			// result or error message
-			c.mu.RLock()
-			// get message channel
-			msgch, ok := c.messages[id]
-			c.mu.RUnlock()
-
-			if !ok {
+			replacedId := msg.Get("id")
+			var originalID interface{}
+			if id, ok := idMapping.Load(replacedId); ok {
+				originalID = id
+			}
+			// 替换消息中的 ID
+			var msgMap map[string]interface{}
+			if err := json.Unmarshal(message, &msgMap); err != nil {
+				fmt.Println("Failed to unmarshal message:", err)
+				continue
+			}
+			msgMap["id"] = originalID
+			newMessage, err := json.Marshal(msgMap)
+			if err != nil {
+				fmt.Println("Failed to marshal message:", err)
+			}
+			if msgch, ok := c.messages.Load(replacedId); ok {
+				msgch.(chan []byte) <- newMessage
+			} else {
 				// response message without corresponding request
 				fmt.Printf("isolated response message: %s\n", message)
 				continue
 			}
-
-			// send response message to channel
-			msgch <- message
 		}
 	}
 }
@@ -163,8 +205,6 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 		return nil, fmt.Errorf("invalid request message: %s", message)
 	}
 
-	message = append(message, '\n')
-
 	if !msg.Get("id").Exists() {
 		// notification message
 		if _, err := c.stdin.Write(message); err != nil {
@@ -176,39 +216,77 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 		return nil, nil
 	}
 
-	// not notification message
-	id := msg.Get("id").Int()
+	idResult := msg.Get("id")
 
-	// message channel
-	msgch := make(chan []byte, 1)
-
-	c.mu.Lock()
-	c.messages[id] = msgch
-	c.mu.Unlock()
-
-	defer func() {
-		c.mu.Lock()
-		delete(c.messages, id)
-		c.mu.Unlock()
-	}()
-
-	if _, err := c.stdin.Write(message); err != nil {
-		c.Close()
-		return nil, fmt.Errorf("failed to write request message: %w", err)
+	var id interface{}
+	switch idResult.Type {
+	case gjson.Number:
+		id = idResult.Int()
+	case gjson.String:
+		id = idResult.String()
+	default:
+		return nil, fmt.Errorf("invalid id value: %s", idResult.Value())
+	}
+	var newId interface{}
+	switch v := id.(type) {
+	case int64, float64, int:
+		newId = getGlobalID()
+	case string:
+		newId = getGlobalStringId()
+	default:
+		return nil, fmt.Errorf("unsupported id value type: %T", v)
 	}
 
-	fmt.Printf("stdin write request message: %s\n", message)
+	idMapping.Store(newId, id)
+
+	id = newId
+
+	// message channel
+	messageChannel := make(chan []byte, 1)
+
+	c.messages.Store(newId, messageChannel)
+
+	defer func() {
+		if _, ok := c.messages.Load(newId); ok {
+			c.messages.Delete(newId)
+		}
+	}()
+
+	// 替换消息中的 ID
+	var msgMap map[string]interface{}
+	if err := json.Unmarshal(message, &msgMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal message:%w", err)
+
+	}
+	msgMap["id"] = id
+	newMessage, err := json.Marshal(msgMap)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal message:%w", err)
+	}
+
+	newMessage = append(newMessage, '\n')
+
+	if _, err := c.stdin.Write(newMessage); err != nil {
+		c.Close()
+		return nil, fmt.Errorf("failed to write request newMessage: %w", err)
+	}
+
+	fmt.Printf("stdin write request newMessage: %s\n", newMessage)
 
 	// wait for response
 	for {
 		select {
 		case <-c.done:
 			fmt.Println("client closed with no response")
+			//delete from pool,if the client was closed
+			if _, ok := clientPool.Load(c.config.CMD); ok {
+				clientPool.Delete(c.config.CMD)
+			}
 			return nil, fmt.Errorf("client closed with no response")
 		case err := <-c.err:
 			fmt.Printf("stderr with no response: %s\n", err)
 			return nil, err
-		case response := <-msgch:
+		case response := <-messageChannel:
 			return response, nil
 		}
 	}

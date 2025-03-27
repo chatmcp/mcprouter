@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"fmt"
+	"github.com/chatmcp/mcprouter/service/mcpserver"
 
 	"github.com/chatmcp/mcprouter/service/mcpclient"
 )
@@ -9,21 +10,21 @@ import (
 // SSESession is a session for SSE request
 type SSESession struct {
 	writer   *SSEWriter
-	done     chan struct{} // done channel
-	messages chan string   // event queue
-	key      string        // client request key
-	command  string        // server run command
+	done     chan struct{}     // done channel
+	messages chan string       // event queue
+	key      string            // client request key
+	Config   *mcpserver.Config // server run command
 	client   *mcpclient.StdioClient
 }
 
 // NewSSESession will create a new SSE session
-func NewSSESession(w *SSEWriter, key string, command string) *SSESession {
+func NewSSESession(w *SSEWriter, key string, config *mcpserver.Config) *SSESession {
 	return &SSESession{
 		writer:   w,
 		done:     make(chan struct{}),
 		messages: make(chan string, 100), // store messages
 		key:      key,
-		command:  command,
+		Config:   config,
 		client:   nil,
 	}
 }
@@ -35,7 +36,12 @@ func (s *SSESession) Key() string {
 
 // Command returns the command of the session
 func (s *SSESession) Command() string {
-	return s.command
+	return s.Config.CMD
+}
+
+// ServerConfig returns the config of the session
+func (s *SSESession) ServerConfig() *mcpserver.Config {
+	return s.Config
 }
 
 // SetClient sets the client of the session
