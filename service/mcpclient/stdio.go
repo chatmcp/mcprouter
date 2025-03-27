@@ -5,13 +5,11 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"github.com/chatmcp/mcprouter/service/mcpserver"
+	"github.com/google/uuid"
 	"io"
 	"os/exec"
 	"sync"
-	"sync/atomic"
-
-	"github.com/chatmcp/mcprouter/service/mcpserver"
-	"github.com/google/uuid"
 
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
 	"github.com/tidwall/gjson"
@@ -20,15 +18,8 @@ import (
 // 在文件开头添加全局 ID 生成器
 var (
 	clientPool = sync.Map{}
-	globalID   atomic.Uint64
 	idMapping  = sync.Map{} // 全局ID到原始ID的映射
 )
-
-// 添加获取全局唯一 ID 的函数
-func getGlobalID() uint64 {
-	globalID.Add(1)
-	return globalID.Load()
-}
 
 func getGlobalStringId() string {
 	return uuid.New().String()
@@ -170,7 +161,7 @@ func (c *StdioClient) listen() {
 			}
 
 			// not notification message
-			replacedId := msg.Get("id")
+			replacedId := msg.Get("id").Value()
 			var originalID interface{}
 			if id, ok := idMapping.Load(replacedId); ok {
 				originalID = id
@@ -216,26 +207,9 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 		return nil, nil
 	}
 
-	idResult := msg.Get("id")
+	id := msg.Get("id").Value()
 
-	var id interface{}
-	switch idResult.Type {
-	case gjson.Number:
-		id = idResult.Int()
-	case gjson.String:
-		id = idResult.String()
-	default:
-		return nil, fmt.Errorf("invalid id value: %s", idResult.Value())
-	}
-	var newId interface{}
-	switch v := id.(type) {
-	case int64, float64, int:
-		newId = getGlobalID()
-	case string:
-		newId = getGlobalStringId()
-	default:
-		return nil, fmt.Errorf("unsupported id value type: %T", v)
-	}
+	var newId = getGlobalStringId()
 
 	idMapping.Store(newId, id)
 
