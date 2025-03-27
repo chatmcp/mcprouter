@@ -31,14 +31,14 @@ func (t *HttpTransport) Write(p []byte) (n int, err error) {
 
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, t.url, bytes.NewReader(p))
 	if err != nil {
-		return
+		return 0, err
 	}
 	request.Header.Set("content-type", "application/json")
 	request.Header.Set("connection", "keep-alive")
 
 	res, err := t.c.Do(request)
 	if err != nil {
-		return
+		return 0, err
 	}
 
 	go func() {
