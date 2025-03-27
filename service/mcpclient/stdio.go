@@ -5,20 +5,21 @@ import (
 	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"github.com/chatmcp/mcprouter/service/mcpserver"
-	"github.com/google/uuid"
 	"io"
 	"os/exec"
 	"sync"
 
+	"github.com/chatmcp/mcprouter/service/mcpserver"
+	"github.com/google/uuid"
+
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
-// 在文件开头添加全局 ID 生成器
 var (
 	clientPool = sync.Map{}
-	idMapping  = sync.Map{} // 全局ID到原始ID的映射
+	idMapping  = sync.Map{} // ID map store the mapping between global ID and original ID
 )
 
 func getGlobalStringId() string {
@@ -159,23 +160,17 @@ func (c *StdioClient) listen() {
 				c.nmu.RUnlock()
 				continue
 			}
-
 			// not notification message
 			replacedId := msg.Get("id").Value()
-			var originalID interface{}
+			var newMessage []byte
+			//replace id to original id
 			if id, ok := idMapping.Load(replacedId); ok {
-				originalID = id
-			}
-			// 替换消息中的 ID
-			var msgMap map[string]interface{}
-			if err := json.Unmarshal(message, &msgMap); err != nil {
-				fmt.Println("Failed to unmarshal message:", err)
-				continue
-			}
-			msgMap["id"] = originalID
-			newMessage, err := json.Marshal(msgMap)
-			if err != nil {
-				fmt.Println("Failed to marshal message:", err)
+				if s, err := sjson.Set(string(message), "id", id); nil == err {
+					newMessage = []byte(s)
+				} else {
+					newMessage = message
+				}
+				idMapping.Delete(replacedId)
 			}
 			if msgch, ok := c.messages.Load(replacedId); ok {
 				msgch.(chan []byte) <- newMessage
@@ -190,6 +185,7 @@ func (c *StdioClient) listen() {
 
 // SendMessage sends a JSON-RPC message to the MCP server and returns the response
 func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
+	fmt.Printf("stdin write request Message: %s\n", message)
 	// parsed message
 	msg := gjson.ParseBytes(message)
 	if msg.Get("jsonrpc").String() != jsonrpc.JSONRPC_VERSION {
@@ -203,41 +199,30 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 		}
 
 		fmt.Printf("stdin write notification message: %s\n", message)
-
 		return nil, nil
 	}
 
 	id := msg.Get("id").Value()
-
 	var newId = getGlobalStringId()
-
 	idMapping.Store(newId, id)
-
-	id = newId
 
 	// message channel
 	messageChannel := make(chan []byte, 1)
-
 	c.messages.Store(newId, messageChannel)
-
 	defer func() {
 		if _, ok := c.messages.Load(newId); ok {
 			c.messages.Delete(newId)
 		}
 	}()
 
-	// 替换消息中的 ID
-	var msgMap map[string]interface{}
-	if err := json.Unmarshal(message, &msgMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal message:%w", err)
+	// 根据原始 ID 类型选择正确的替换方式
+	var newMessage []byte
 
+	if s, err := sjson.Set(msg.String(), "id", newId); nil == err {
+		newMessage = []byte(s)
+	} else {
+		return nil, fmt.Errorf("set id error")
 	}
-	msgMap["id"] = id
-	newMessage, err := json.Marshal(msgMap)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal message:%w", err)
-	}
-
 	newMessage = append(newMessage, '\n')
 
 	if _, err := c.stdin.Write(newMessage); err != nil {
