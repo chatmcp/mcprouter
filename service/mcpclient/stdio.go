@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os/exec"
 	"sync"
 
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
@@ -14,7 +13,7 @@ import (
 
 // StdioClient is a client that uses stdin and stdout to communicate with the backend mcp server.
 type StdioClient struct {
-	cmd           *exec.Cmd
+	transport     Transport
 	stdin         io.WriteCloser
 	stdout        *bufio.Reader
 	stderr        *bufio.Reader
@@ -28,41 +27,14 @@ type StdioClient struct {
 
 // NewStdioClient creates a new StdioClient.
 func NewStdioClient(command string) (*StdioClient, error) {
-	cmd := exec.Command(
-		"sh",
-		"-c",
-		command,
-	)
 
-	stdin, err := cmd.StdinPipe()
+	client, err := newStdioClient(command)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)
+		return nil, err
 	}
+	client.transport.Start()
 
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stdout pipe: %w", err)
-	}
-
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create stderr pipe: %w", err)
-	}
-
-	client := &StdioClient{
-		cmd:      cmd,
-		stdin:    stdin,
-		stdout:   bufio.NewReader(stdout),
-		stderr:   bufio.NewReader(stderr),
-		done:     make(chan struct{}),
-		messages: make(map[int64]chan []byte),
-		err:      make(chan error, 1),
-	}
-
-	// run command
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("failed to start command: %w", err)
-	}
+	stderr := client.transport.GetStdErrOutput()
 
 	// listen stderr
 	go func() {
@@ -278,5 +250,5 @@ func (c *StdioClient) Close() error {
 		return fmt.Errorf("failed to close stdin: %w", err)
 	}
 
-	return c.cmd.Wait()
+	return c.transport.Stop()
 }
