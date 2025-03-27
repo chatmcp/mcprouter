@@ -36,7 +36,7 @@ func Messages(c echo.Context) error {
 
 	client := ctx.GetClient(sseKey)
 
-	if request.Method == "initialize" && client == nil {
+	if client == nil {
 		command := session.Command()
 		_client, err := mcpclient.NewStdioClient(command)
 		if err != nil {
