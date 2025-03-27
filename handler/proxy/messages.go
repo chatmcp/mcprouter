@@ -37,7 +37,7 @@ func Messages(c echo.Context) error {
 	client := ctx.GetClient(sseKey)
 
 	if client == nil {
-		config := session.ServerConfig()
+		config := session.Config()
 		_client, err := mcpclient.NewStdioClient(config)
 		if err != nil {
 			fmt.Printf("connect to mcp server failed: %v\n", err)

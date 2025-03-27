@@ -39,8 +39,8 @@ func (s *SSESession) Command() string {
 	return s.config.CMD
 }
 
-// ServerConfig returns the config of the session
-func (s *SSESession) ServerConfig() *mcpserver.Config {
+// Config returns the config of the session
+func (s *SSESession) Config() *mcpserver.Config {
 	return s.config
 }
 
