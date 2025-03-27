@@ -161,18 +161,20 @@ func (c *StdioClient) listen() {
 				continue
 			}
 			// not notification message
-			replacedId := msg.Get("id").Value()
+			messageId := msg.Get("id").Value()
 			var newMessage []byte
 			//replace id to original id
-			if id, ok := idMapping.Load(replacedId); ok {
+			if id, ok := idMapping.Load(messageId); ok {
 				if s, err := sjson.Set(string(message), "id", id); nil == err {
 					newMessage = []byte(s)
 				} else {
 					newMessage = message
 				}
-				idMapping.Delete(replacedId)
+				idMapping.Delete(messageId)
+			} else {
+				newMessage = message
 			}
-			if msgch, ok := c.messages.Load(replacedId); ok {
+			if msgch, ok := c.messages.Load(messageId); ok {
 				msgch.(chan []byte) <- newMessage
 			} else {
 				// response message without corresponding request
@@ -201,30 +203,34 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 		fmt.Printf("stdin write notification message: %s\n", message)
 		return nil, nil
 	}
-
-	id := msg.Get("id").Value()
-	var newId = getGlobalStringId()
-	idMapping.Store(newId, id)
-
 	// message channel
 	messageChannel := make(chan []byte, 1)
-	c.messages.Store(newId, messageChannel)
-	defer func() {
-		if _, ok := c.messages.Load(newId); ok {
-			c.messages.Delete(newId)
-		}
-	}()
-
-	// 根据原始 ID 类型选择正确的替换方式
+	id := msg.Get("id").Value()
 	var newMessage []byte
-
-	if s, err := sjson.Set(msg.String(), "id", newId); nil == err {
-		newMessage = []byte(s)
+	if c.config.ShareProcess {
+		var newId = getGlobalStringId()
+		c.messages.Store(newId, messageChannel)
+		idMapping.Store(newId, id)
+		defer func() {
+			if _, ok := c.messages.Load(newId); ok {
+				c.messages.Delete(newId)
+			}
+		}()
+		if s, err := sjson.Set(msg.String(), "id", newId); nil == err {
+			newMessage = []byte(s)
+		} else {
+			return nil, fmt.Errorf("set id error")
+		}
 	} else {
-		return nil, fmt.Errorf("set id error")
+		newMessage = message
+		defer func() {
+			if _, ok := c.messages.Load(id); ok {
+				c.messages.Delete(id)
+			}
+		}()
 	}
-	newMessage = append(newMessage, '\n')
 
+	newMessage = append(newMessage, '\n')
 	if _, err := c.stdin.Write(newMessage); err != nil {
 		c.Close()
 		return nil, fmt.Errorf("failed to write request newMessage: %w", err)

@@ -12,8 +12,8 @@ import (
 )
 
 type Config struct {
-	CMD          string `json:"cmd"`
-	ShareProcess bool   `json:"share_process"`
+	CMD          string `mapstructure:"cmd"`
+	ShareProcess bool   `mapstructure:"share_process"`
 }
 
 // GetConfig returns the command for the given key
@@ -25,6 +25,7 @@ func GetConfig(key string) *Config {
 		fmt.Printf("failed to unmarshal config for key %s: %v\n", key, err)
 		return getRemoteServerConfig(key)
 	}
+	fmt.Printf("Parsed Config: %+v\n", config) // 🔍 观察解析结果
 
 	if config.CMD == "" {
 		return getRemoteServerConfig(key)
