@@ -14,6 +14,7 @@ import (
 type Config struct {
 	CMD          string `mapstructure:"cmd"`
 	ShareProcess bool   `mapstructure:"share_process"`
+	Key          string
 }
 
 // GetConfig returns the command for the given key
@@ -30,7 +31,7 @@ func GetConfig(key string) *Config {
 	if config.CMD == "" {
 		return getRemoteServerConfig(key)
 	}
-
+	config.Key = key
 	return &config
 }
 

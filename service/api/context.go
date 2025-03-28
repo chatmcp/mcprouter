@@ -96,7 +96,7 @@ func (c *APIContext) Connect() (*mcpclient.StdioClient, error) {
 		return nil, fmt.Errorf("invalid command")
 	}
 
-	client, err := mcpclient.NewStdioClient(cfg)
+	client, err := mcpclient.GetStdioClient(cfg)
 	if err != nil {
 		return nil, fmt.Errorf("connect to mcp server failed")
 	}

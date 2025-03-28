@@ -2,29 +2,32 @@ package mcpclient
 
 import (
 	"bufio"
-	"crypto/md5"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"os/exec"
 	"sync"
-
-	"github.com/chatmcp/mcprouter/service/mcpserver"
-	"github.com/google/uuid"
+	"sync/atomic"
 
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
+	"github.com/chatmcp/mcprouter/service/mcpserver"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
 
 var (
-	clientPool = sync.Map{}
-	idMapping  = sync.Map{} // ID map store the mapping between global ID and original ID
+	gloableId atomic.Int64
+	idMapping = sync.Map{} // ID map store the mapping between global ID and original ID
 )
 
 func getGlobalStringId() string {
 	return uuid.New().String()
+	//gloableId.Add(1)
+	//return gloableId.Load()
 }
+
+type OnClientClosed func(client *StdioClient)
 
 // StdioClient is a client that uses stdin and stdout to communicate with the backend mcp server.
 type StdioClient struct {
@@ -39,19 +42,12 @@ type StdioClient struct {
 	notifications []func(message []byte) // notification handlers
 	nmu           sync.RWMutex
 	err           chan error // stderr message
-
+	closedFunc    OnClientClosed
 }
 
 // NewStdioClient creates a new StdioClient.
-func NewStdioClient(config *mcpserver.Config) (*StdioClient, error) {
+func newStdioClient(config *mcpserver.Config, onClientClosed OnClientClosed) (*StdioClient, error) {
 	// check if  the server can  share process
-	if config.ShareProcess {
-		//md5 config.CMD
-		hash := md5.Sum([]byte(config.CMD))
-		if v, ok := clientPool.Load(hash); ok {
-			return v.(*StdioClient), nil
-		}
-	}
 
 	cmd := exec.Command(
 		"sh",
@@ -75,14 +71,15 @@ func NewStdioClient(config *mcpserver.Config) (*StdioClient, error) {
 	}
 
 	client := &StdioClient{
-		config:   config,
-		cmd:      cmd,
-		stdin:    stdin,
-		stdout:   bufio.NewReader(stdout),
-		stderr:   bufio.NewReader(stderr),
-		done:     make(chan struct{}),
-		messages: sync.Map{},
-		err:      make(chan error, 1),
+		config:     config,
+		cmd:        cmd,
+		stdin:      stdin,
+		stdout:     bufio.NewReader(stdout),
+		stderr:     bufio.NewReader(stderr),
+		done:       make(chan struct{}),
+		messages:   sync.Map{},
+		err:        make(chan error, 1),
+		closedFunc: onClientClosed,
 	}
 
 	// run command
@@ -113,8 +110,6 @@ func NewStdioClient(config *mcpserver.Config) (*StdioClient, error) {
 	ready := make(chan struct{})
 	go func() {
 		close(ready)
-		hash := md5.Sum([]byte(config.CMD))
-		clientPool.Store(hash, client)
 		client.listen()
 	}()
 	<-ready
@@ -207,27 +202,19 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 	messageChannel := make(chan []byte, 1)
 	id := msg.Get("id").Value()
 	var newMessage []byte
-	if c.config.ShareProcess {
-		var newId = getGlobalStringId()
-		c.messages.Store(newId, messageChannel)
-		idMapping.Store(newId, id)
-		defer func() {
-			if _, ok := c.messages.Load(newId); ok {
-				c.messages.Delete(newId)
-			}
-		}()
-		if s, err := sjson.Set(msg.String(), "id", newId); nil == err {
-			newMessage = []byte(s)
-		} else {
-			return nil, fmt.Errorf("set id error")
+
+	var newId = getGlobalStringId()
+	c.messages.Store(newId, messageChannel)
+	idMapping.Store(newId, id)
+	defer func() {
+		if _, ok := c.messages.Load(newId); ok {
+			c.messages.Delete(newId)
 		}
+	}()
+	if s, err := sjson.Set(msg.String(), "id", newId); nil == err {
+		newMessage = []byte(s)
 	} else {
-		newMessage = message
-		defer func() {
-			if _, ok := c.messages.Load(id); ok {
-				c.messages.Delete(id)
-			}
-		}()
+		return nil, fmt.Errorf("set id error")
 	}
 
 	newMessage = append(newMessage, '\n')
@@ -244,8 +231,8 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 		case <-c.done:
 			fmt.Println("client closed with no response")
 			//delete from pool,if the client was closed
-			if _, ok := clientPool.Load(c.config.CMD); ok {
-				clientPool.Delete(c.config.CMD)
+			if c.closedFunc != nil {
+				c.closedFunc(c)
 			}
 			return nil, fmt.Errorf("client closed with no response")
 		case err := <-c.err:
@@ -321,5 +308,8 @@ func (c *StdioClient) Close() error {
 		return fmt.Errorf("failed to close stdin: %w", err)
 	}
 
+	if nil != c.closedFunc {
+		c.closedFunc(c)
+	}
 	return c.cmd.Wait()
 }
