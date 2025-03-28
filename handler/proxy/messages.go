@@ -32,37 +32,29 @@ func Messages(c echo.Context) error {
 		return ctx.JSONRPCError(jsonrpc.ErrorParseError, nil)
 	}
 
-	sseKey := session.Key()
+	config := session.Config()
+	var client *mcpclient.StdioClient
 
-	client := ctx.GetClient(sseKey)
-
-	if client == nil {
-		command := session.Command()
-		_client, err := mcpclient.NewStdioClient(command)
-		if err != nil {
-			fmt.Printf("connect to mcp server failed: %v\n", err)
-			return ctx.JSONRPCError(jsonrpc.ErrorProxyError, request.ID)
-		}
-
-		if err := _client.Error(); err != nil {
-			fmt.Printf("mcp server run failed: %v\n", err)
-			return ctx.JSONRPCError(jsonrpc.ErrorProxyError, request.ID)
-		}
-
-		ctx.StoreClient(sseKey, _client)
-		ctx.StoreSession(sessionID, session)
-
-		client = _client
-
-		client.OnNotification(func(message []byte) {
-			fmt.Printf("received notification: %s\n", message)
-			session.SendMessage(string(message))
-		})
-	}
+	client, err = mcpclient.GetStdioClient(config)
 
 	if client == nil {
 		return ctx.JSONRPCError(jsonrpc.ErrorProxyError, request.ID)
 	}
+
+	if err != nil {
+		fmt.Printf("connect to mcp server failed: %v\n", err)
+		return ctx.JSONRPCError(jsonrpc.ErrorProxyError, request.ID)
+	}
+
+	if err := client.Error(); err != nil {
+		fmt.Printf("mcp server run failed: %v\n", err)
+		return ctx.JSONRPCError(jsonrpc.ErrorProxyError, request.ID)
+	}
+	ctx.StoreSession(sessionID, session)
+	client.OnNotification(func(message []byte) {
+		fmt.Printf("received notification: %s\n", message)
+		session.SendMessage(string(message))
+	})
 
 	response, err := client.ForwardMessage(request)
 	if err != nil {

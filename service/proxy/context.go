@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
-	"github.com/chatmcp/mcprouter/service/mcpclient"
 	"github.com/labstack/echo/v4"
 )
 
@@ -14,17 +13,16 @@ import (
 type SSEContext struct {
 	echo.Context
 	sessions *sync.Map // sessions store
-	clients  *sync.Map // clients store
+	clients  *sync.Map
 }
 
 // createSSEMiddleware will create a middleware for http request
-func createSSEMiddleware(sessions *sync.Map, clients *sync.Map) echo.MiddlewareFunc {
+func createSSEMiddleware(sessions *sync.Map) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := &SSEContext{
 				Context:  c,
 				sessions: sessions,
-				clients:  clients,
 			}
 
 			return next(ctx)
@@ -58,29 +56,6 @@ func (c *SSEContext) StoreSession(key string, session *SSESession) {
 // DeleteSession deletes the session from the sessions store
 func (c *SSEContext) DeleteSession(key string) {
 	c.sessions.Delete(key)
-}
-
-// StoreClient stores the client in the clients store
-func (c *SSEContext) StoreClient(key string, client *mcpclient.StdioClient) {
-	c.clients.Store(key, client)
-}
-
-// GetClient returns the client from the clients store
-func (c *SSEContext) GetClient(key string) *mcpclient.StdioClient {
-	if client, ok := c.clients.Load(key); ok {
-		return client.(*mcpclient.StdioClient)
-	}
-
-	return nil
-}
-
-// DeleteClient deletes the client from the clients store
-func (c *SSEContext) DeleteClient(key string) {
-	if client, ok := c.clients.Load(key); ok {
-		client.(*mcpclient.StdioClient).Close()
-	}
-
-	c.clients.Delete(key)
 }
 
 // GetJSONRPCRequest returns the JSON-RPC request from the request body

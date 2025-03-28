@@ -25,8 +25,8 @@ func SSE(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "Key is required")
 	}
 
-	command := mcpserver.GetCommand(key)
-	if command == "" {
+	config := mcpserver.GetConfig(key)
+	if config == nil {
 		return c.String(http.StatusBadRequest, "Server command not found")
 	}
 
@@ -37,7 +37,7 @@ func SSE(c echo.Context) error {
 
 	// store session
 	sessionID := uuid.New().String()
-	session := proxy.NewSSESession(writer, key, command)
+	session := proxy.NewSSESession(writer, key, config)
 	ctx.StoreSession(sessionID, session)
 	defer ctx.DeleteSession(sessionID)
 

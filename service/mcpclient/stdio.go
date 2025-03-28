@@ -4,34 +4,55 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"os/exec"
 	"sync"
+	"sync/atomic"
 
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
+	"github.com/chatmcp/mcprouter/service/mcpserver"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
+
+var (
+	gloableId atomic.Int64
+	idMapping = sync.Map{} // ID map store the mapping between global ID and original ID
+)
+
+func getGlobalStringId() string {
+	return uuid.New().String()
+	//gloableId.Add(1)
+	//return gloableId.Load()
+}
+
+type OnClientClosed func(client *StdioClient)
 
 // StdioClient is a client that uses stdin and stdout to communicate with the backend mcp server.
 type StdioClient struct {
+	config        *mcpserver.Config
 	cmd           *exec.Cmd
 	stdin         io.WriteCloser
 	stdout        *bufio.Reader
 	stderr        *bufio.Reader
-	done          chan struct{}         // client closed signal
-	messages      map[int64]chan []byte // stdout messages channel
+	done          chan struct{} // client closed signal
+	messages      sync.Map      // stdout messages channel
 	mu            sync.RWMutex
 	notifications []func(message []byte) // notification handlers
 	nmu           sync.RWMutex
 	err           chan error // stderr message
+	closedFunc    OnClientClosed
 }
 
 // NewStdioClient creates a new StdioClient.
-func NewStdioClient(command string) (*StdioClient, error) {
+func newStdioClient(config *mcpserver.Config, onClientClosed OnClientClosed) (*StdioClient, error) {
+	// check if  the server can  share process
+
 	cmd := exec.Command(
 		"sh",
 		"-c",
-		command,
+		config.CMD,
 	)
 
 	stdin, err := cmd.StdinPipe()
@@ -50,13 +71,15 @@ func NewStdioClient(command string) (*StdioClient, error) {
 	}
 
 	client := &StdioClient{
-		cmd:      cmd,
-		stdin:    stdin,
-		stdout:   bufio.NewReader(stdout),
-		stderr:   bufio.NewReader(stderr),
-		done:     make(chan struct{}),
-		messages: make(map[int64]chan []byte),
-		err:      make(chan error, 1),
+		config:     config,
+		cmd:        cmd,
+		stdin:      stdin,
+		stdout:     bufio.NewReader(stdout),
+		stderr:     bufio.NewReader(stderr),
+		done:       make(chan struct{}),
+		messages:   sync.Map{},
+		err:        make(chan error, 1),
+		closedFunc: onClientClosed,
 	}
 
 	// run command
@@ -91,8 +114,7 @@ func NewStdioClient(command string) (*StdioClient, error) {
 	}()
 	<-ready
 
-	fmt.Printf("mcp server running with command: %s\n", command)
-
+	fmt.Printf("mcp server running with command: %s\n", config.CMD)
 	return client, nil
 }
 
@@ -133,37 +155,39 @@ func (c *StdioClient) listen() {
 				c.nmu.RUnlock()
 				continue
 			}
-
 			// not notification message
-			id := msg.Get("id").Int()
-
-			// result or error message
-			c.mu.RLock()
-			// get message channel
-			msgch, ok := c.messages[id]
-			c.mu.RUnlock()
-
-			if !ok {
+			messageId := msg.Get("id").Value()
+			var newMessage []byte
+			//replace id to original id
+			if id, ok := idMapping.Load(messageId); ok {
+				if s, err := sjson.Set(string(message), "id", id); nil == err {
+					newMessage = []byte(s)
+				} else {
+					newMessage = message
+				}
+				idMapping.Delete(messageId)
+			} else {
+				newMessage = message
+			}
+			if msgch, ok := c.messages.Load(messageId); ok {
+				msgch.(chan []byte) <- newMessage
+			} else {
 				// response message without corresponding request
 				fmt.Printf("isolated response message: %s\n", message)
 				continue
 			}
-
-			// send response message to channel
-			msgch <- message
 		}
 	}
 }
 
 // SendMessage sends a JSON-RPC message to the MCP server and returns the response
 func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
+	fmt.Printf("stdin write request Message: %s\n", message)
 	// parsed message
 	msg := gjson.ParseBytes(message)
 	if msg.Get("jsonrpc").String() != jsonrpc.JSONRPC_VERSION {
 		return nil, fmt.Errorf("invalid request message: %s", message)
 	}
-
-	message = append(message, '\n')
 
 	if !msg.Get("id").Exists() {
 		// notification message
@@ -172,43 +196,49 @@ func (c *StdioClient) SendMessage(message []byte) ([]byte, error) {
 		}
 
 		fmt.Printf("stdin write notification message: %s\n", message)
-
 		return nil, nil
 	}
-
-	// not notification message
-	id := msg.Get("id").Int()
-
 	// message channel
-	msgch := make(chan []byte, 1)
+	messageChannel := make(chan []byte, 1)
+	id := msg.Get("id").Value()
+	var newMessage []byte
 
-	c.mu.Lock()
-	c.messages[id] = msgch
-	c.mu.Unlock()
-
+	var newId = getGlobalStringId()
+	c.messages.Store(newId, messageChannel)
+	idMapping.Store(newId, id)
 	defer func() {
-		c.mu.Lock()
-		delete(c.messages, id)
-		c.mu.Unlock()
+		if _, ok := c.messages.Load(newId); ok {
+			c.messages.Delete(newId)
+		}
 	}()
-
-	if _, err := c.stdin.Write(message); err != nil {
-		c.Close()
-		return nil, fmt.Errorf("failed to write request message: %w", err)
+	if s, err := sjson.Set(msg.String(), "id", newId); nil == err {
+		newMessage = []byte(s)
+	} else {
+		return nil, fmt.Errorf("set id error")
 	}
 
-	fmt.Printf("stdin write request message: %s\n", message)
+	newMessage = append(newMessage, '\n')
+	if _, err := c.stdin.Write(newMessage); err != nil {
+		c.Close()
+		return nil, fmt.Errorf("failed to write request newMessage: %w", err)
+	}
+
+	fmt.Printf("stdin write request newMessage: %s\n", newMessage)
 
 	// wait for response
 	for {
 		select {
 		case <-c.done:
 			fmt.Println("client closed with no response")
+			//delete from pool,if the client was closed
+			if c.closedFunc != nil {
+				c.closedFunc(c)
+			}
 			return nil, fmt.Errorf("client closed with no response")
 		case err := <-c.err:
 			fmt.Printf("stderr with no response: %s\n", err)
 			return nil, err
-		case response := <-msgch:
+		case response := <-messageChannel:
 			return response, nil
 		}
 	}
@@ -278,5 +308,8 @@ func (c *StdioClient) Close() error {
 		return fmt.Errorf("failed to close stdin: %w", err)
 	}
 
+	if nil != c.closedFunc {
+		c.closedFunc(c)
+	}
 	return c.cmd.Wait()
 }
