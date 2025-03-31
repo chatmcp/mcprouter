@@ -32,7 +32,10 @@ func NewStdioClient(command string) (*StdioClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	client.transport.Start()
+	err = client.transport.Start()
+	if err != nil {
+		return nil, err
+	}
 
 	stderr := client.transport.GetStdErrOutput()
 
