@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"runtime"
 	"sync"
 	"time"
 
@@ -32,11 +33,18 @@ type StdioClient struct {
 
 // NewStdioClient creates a new StdioClient.
 func NewStdioClient(serverConfig *mcpserver.ServerConfig) (*StdioClient, error) {
-	cmd := exec.Command(
-		"sh",
-		"-c",
-		serverConfig.Command,
-	)
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd.exe", "/C", serverConfig.Command)
+	} else {
+		cmd = exec.Command("sh", "-c", serverConfig.Command)
+	}
+
+	//cmd := exec.Command(
+	//	"sh",
+	//	"-c",
+	//	serverConfig.Command,
+	//)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
