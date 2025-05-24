@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/chatmcp/mcprouter/model"
+	"github.com/chatmcp/mcprouter/util"
 )
 
 // ProxyInfo is the info for the proxy
@@ -35,6 +36,11 @@ type ProxyInfo struct {
 	ResponseResult     interface{} `json:"response_result"`
 	ResponseError      string      `json:"response_error"`
 	CostTime           int64       `json:"cost_time"`
+}
+
+// GetSessionID returns the session ID for the proxy info
+func (p *ProxyInfo) GetSessionID() string {
+	return util.MD5(p.ServerKey)
 }
 
 // ToServerLog converts a ProxyInfo to a ServerLog

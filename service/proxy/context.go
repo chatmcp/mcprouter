@@ -116,3 +116,54 @@ func (c *SSEContext) JSONRPCResponse(response *jsonrpc.Response) error {
 func (c *SSEContext) JSONRPCAcceptResponse(response *jsonrpc.Response) error {
 	return c.JSON(http.StatusAccepted, response)
 }
+
+// JSONRPCStreamResponse returns a JSON-RPC response in SSE format for streaming
+func (c *SSEContext) JSONRPCStreamResponse(response *jsonrpc.Response) error {
+	writer, err := NewSSEWriter(c)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "SSE not supported"})
+	}
+
+	// Send the JSON-RPC response as SSE data
+	responseJSON := response.String()
+	if err := writer.SendEventData("jsonrpc", responseJSON); err != nil {
+		return err
+	}
+
+	// Send completion event to indicate end of response
+	if err := writer.SendEventData("stream", "completed"); err != nil {
+		return err
+	}
+
+	// Return nil to indicate successful handling
+	return nil
+}
+
+// JSONRPCStreamStart initiates a streaming response and returns the writer for continued streaming
+func (c *SSEContext) JSONRPCStreamStart() (*SSEWriter, error) {
+	writer, err := NewSSEWriter(c)
+	if err != nil {
+		return nil, err
+	}
+
+	// Send initial event to indicate streaming has started
+	err = writer.SendEventData("stream", "started")
+	if err != nil {
+		return nil, err
+	}
+
+	return writer, nil
+}
+
+// JSONRPCStreamComplete sends a completion event and closes the stream
+func (c *SSEContext) JSONRPCStreamComplete(writer *SSEWriter, response *jsonrpc.Response) error {
+	if response != nil {
+		responseJSON := response.String()
+		if err := writer.SendEventData("jsonrpc", responseJSON); err != nil {
+			return err
+		}
+	}
+
+	// Send completion event
+	return writer.SendEventData("stream", "completed")
+}
