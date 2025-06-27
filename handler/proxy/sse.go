@@ -3,123 +3,103 @@ package proxy
 import (
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/chatmcp/mcprouter/service/mcpserver"
 	"github.com/chatmcp/mcprouter/service/proxy"
-	"github.com/chatmcp/mcprouter/util"
 	"github.com/labstack/echo/v4"
 )
 
 // SSE is a handler for the sse endpoint
 func SSE(c echo.Context) error {
-	ctx := proxy.GetSSEContext(c)
-	if ctx == nil {
-		return c.String(http.StatusInternalServerError, "Failed to get SSE context")
-	}
-
-	return c.String(http.StatusNotFound, "sse connection not supported now, please use streamable http or stdio connection")
-
-	req := c.Request()
-
-	key := c.Param("key")
-	if key == "" {
-		return c.String(http.StatusBadRequest, "Key is required")
-	}
-
-	serverConfig := mcpserver.GetServerConfig(key)
-	if serverConfig == nil {
-		return c.String(http.StatusBadRequest, "Invalid server config")
-	}
-
-	writer, err := proxy.NewSSEWriter(c)
+	ctx, err := validateSSEContext(c)
 	if err != nil {
-		return c.String(http.StatusInternalServerError, err.Error())
+		return err
 	}
 
-	// sessionID := uuid.New().String()
-	sessionID := util.MD5(key)
-
-	proxyInfo := &proxy.ProxyInfo{
-		ServerKey:          key,
-		ConnectionTime:     time.Now(),
-		SessionID:          sessionID,
-		ServerUUID:         serverConfig.ServerUUID,
-		ServerConfigName:   serverConfig.ServerName,
-		ServerShareProcess: serverConfig.ShareProcess,
-		ServerType:         serverConfig.ServerType,
-		ServerURL:          serverConfig.ServerURL,
-		ServerCommand:      serverConfig.Command,
-		ServerCommandHash:  serverConfig.CommandHash,
+	// Parse and validate request
+	key, serverConfig, err := parseSSERequest(c)
+	if err != nil {
+		return err
 	}
 
-	// store session
-	session := proxy.NewSSESession(writer, serverConfig, proxyInfo)
-	ctx.StoreSession(sessionID, session)
+	// Setup SSE connection and session
+	writer, session, sessionID, err := setupSSEConnection(c, ctx, key, serverConfig)
+	if err != nil {
+		return err
+	}
 	defer ctx.DeleteSession(sessionID)
 
-	// Setup heartbeat ticker
-	// heartbeatInterval := 30 * time.Second // adjust interval as needed
-	// heartbeatTicker := time.NewTicker(heartbeatInterval)
-	// defer heartbeatTicker.Stop()
+	// Handle SSE messages and lifecycle
+	return handleSSEMessages(c, writer, session, sessionID)
+}
 
-	// Setup idle timeout
-	// idleTimeout := 5 * time.Minute // adjust timeout as needed
-	// idleTimer := time.NewTimer(idleTimeout)
-	// defer idleTimer.Stop()
+// parseSSERequest validates request parameters and gets server config
+func parseSSERequest(c echo.Context) (string, *mcpserver.ServerConfig, error) {
+	// Use common validation function
+	return validateKeyAndConfig(c)
+}
 
-	// // Reset idle timer when activity occurs
-	// resetIdleTimer := func() {
-	// 	if !idleTimer.Stop() {
-	// 		<-idleTimer.C
-	// 	}
-	// 	idleTimer.Reset(idleTimeout)
-	// }
+// setupSSEConnection creates SSE writer, session and proxy info
+func setupSSEConnection(c echo.Context, ctx *proxy.SSEContext, key string, serverConfig *mcpserver.ServerConfig) (*proxy.SSEWriter, *proxy.SSESession, string, error) {
+	// Create SSE writer
+	writer, err := proxy.NewSSEWriter(c)
+	if err != nil {
+		return nil, nil, "", c.String(http.StatusInternalServerError, err.Error())
+	}
 
-	go func() {
-		for {
-			select {
-			case <-session.Done():
-				return
-			case <-req.Context().Done():
-				return
-				// case <-heartbeatTicker.C:
-				// 	// Send heartbeat comment
-				// 	// if err := writer.SendHeartbeat(); err != nil {
-				// 	// 	session.Close()
-				// 	// 	return
-				// 	// }
-				// case <-idleTimer.C:
-				// 	// Close connection due to inactivity
-				// 	session.Close()
-				// 	return
-			}
-		}
-	}()
+	// Create base proxy info using common function
+	proxyInfo := createProxyInfo(key, serverConfig)
 
-	// response to client with endpoint url
+	// Generate session ID using common function and set it
+	sessionID := proxyInfo.GetSessionID()
+	proxyInfo.SessionID = sessionID
+
+	// Create and store session
+	session := proxy.NewSSESession(writer, serverConfig, proxyInfo)
+	ctx.StoreSession(sessionID, session)
+
+	return writer, session, sessionID, nil
+}
+
+// handleSSEMessages manages SSE message lifecycle and communication
+func handleSSEMessages(c echo.Context, writer *proxy.SSEWriter, session *proxy.SSESession, sessionID string) error {
+	req := c.Request()
+
+	// Start session lifecycle goroutine
+	go monitorSession(session, req)
+
+	// Send endpoint information to client
 	messagesUrl := fmt.Sprintf("/messages?sessionid=%s", sessionID)
 	writer.SendEventData("endpoint", messagesUrl)
 
-	// listen to messages
+	// Main message handling loop
 	for {
 		select {
 		case message := <-session.Messages():
-			// Reset idle timer on message activity
-			// resetIdleTimer()
-
 			if err := writer.SendMessage(message); err != nil {
-				fmt.Printf("sse failed to send message to session %s: %v\n", sessionID, err)
-				session.Close() // Close session on send error
-				return nil      // Exit the handler
+				fmt.Printf("SSE failed to send message to session %s: %v\n", sessionID, err)
+				session.Close()
+				return nil
 			}
 		case <-session.Done():
-			fmt.Printf("session %s closed \n", sessionID)
+			fmt.Printf("Session %s closed\n", sessionID)
 			return nil
 		case <-req.Context().Done():
-			fmt.Println("sse request done")
+			fmt.Println("SSE request done")
 			session.Close()
 			return nil
+		}
+	}
+}
+
+// monitorSession monitors session and request lifecycle
+func monitorSession(session *proxy.SSESession, req *http.Request) {
+	for {
+		select {
+		case <-session.Done():
+			return
+		case <-req.Context().Done():
+			return
 		}
 	}
 }
