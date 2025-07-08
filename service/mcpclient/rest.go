@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -79,6 +80,8 @@ func (c *RestClient) OnNotification(handler func(message []byte)) {
 
 // SendMessage sends a JSON-RPC message to the MCP server and returns the response
 func (c *RestClient) SendMessage(message []byte) ([]byte, error) {
+	fmt.Printf("sending message: %s\n", message)
+
 	// parsed message
 	msg := gjson.ParseBytes(message)
 	if msg.Get("jsonrpc").String() != jsonrpc.JSONRPC_VERSION {
@@ -165,8 +168,31 @@ func (c *RestClient) SendMessage(message []byte) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
+	// Add debug information
+	fmt.Printf("HTTP Status: %d\n", resp.StatusCode)
+	fmt.Printf("Content-Type: %s\n", resp.Header.Get("Content-Type"))
+	fmt.Printf("Response Body: %s\n", string(responseBody))
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("server returned status code %d: %s", resp.StatusCode, responseBody)
+	}
+
+	// Check response type by Content-Type header
+	contentType := resp.Header.Get("Content-Type")
+	if strings.Contains(contentType, "text/event-stream") {
+		// Parse SSE format and extract data field
+		responseStr := string(responseBody)
+		lines := strings.Split(responseStr, "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "data: ") {
+				// Extract content from data field
+				dataContent := strings.TrimPrefix(line, "data: ")
+				return []byte(dataContent), nil
+			}
+		}
+		// If no data field found, return original response
+		return responseBody, nil
 	}
 
 	return responseBody, nil
@@ -189,6 +215,9 @@ func (c *RestClient) ForwardMessage(request *jsonrpc.Request) (*jsonrpc.Response
 	if res == nil {
 		return nil, nil
 	}
+
+	// Add debug information
+	fmt.Printf("Attempting to parse response: %s\n", string(res))
 
 	response := &jsonrpc.Response{}
 	if err := json.Unmarshal(res, response); err != nil {
