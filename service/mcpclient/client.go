@@ -26,8 +26,8 @@ type Client interface {
 func NewClient(serverConfig *mcpserver.ServerConfig) (Client, error) {
 	log.Printf("new client with server config: %+v\n", serverConfig)
 
-	if strings.HasSuffix(serverConfig.ServerType, "_rest") {
-		if serverConfig.ServerURL == "" {
+	if serverConfig.ServerURL != "" {
+		if !strings.HasPrefix(serverConfig.ServerURL, "http") {
 			return nil, fmt.Errorf("invalid server url")
 		}
 
