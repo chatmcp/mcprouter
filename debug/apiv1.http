@@ -1,10 +1,11 @@
-@baseUrl = http://127.0.0.1:8027
+# @baseUrl = http://127.0.0.1:8027/v1
+@baseUrl = https://api.chatmcp.ai/v1
 @apiKey = xxx
 @clientName = ChatMCP
 @clientURL = https://chatmcp.ai
 
 ### list servers
-POST {{baseUrl}}/v1/list-servers
+POST {{baseUrl}}/list-servers
 Content-Type: application/json
 Authorization: Bearer {{apiKey}}
 
@@ -14,7 +15,7 @@ Authorization: Bearer {{apiKey}}
 }
 
 ### get server
-POST {{baseUrl}}/v1/get-server
+POST {{baseUrl}}/get-server
 Content-Type: application/json
 Authorization: Bearer {{apiKey}}
 
@@ -23,7 +24,7 @@ Authorization: Bearer {{apiKey}}
   "author_name": "anthropic"
 }
 ### list tools
-POST {{baseUrl}}/v1/list-tools
+POST {{baseUrl}}/list-tools
 Content-Type: application/json
 Authorization: Bearer {{apiKey}}
 
@@ -32,7 +33,7 @@ Authorization: Bearer {{apiKey}}
 }
 
 ### call tool
-POST {{baseUrl}}/v1/call-tool
+POST {{baseUrl}}/call-tool
 Content-Type: application/json
 Authorization: Bearer {{apiKey}}
 HTTP-Referer: {{clientURL}}
