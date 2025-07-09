@@ -13,6 +13,15 @@ Authorization: Bearer {{apiKey}}
   "limit": 30
 }
 
+### get server
+POST {{baseUrl}}/v1/get-server
+Content-Type: application/json
+Authorization: Bearer {{apiKey}}
+
+{
+  "name": "time-mcp",
+  "author_name": "anthropic"
+}
 ### list tools
 POST {{baseUrl}}/v1/list-tools
 Content-Type: application/json

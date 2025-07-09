@@ -1,4 +1,4 @@
-package beta
+package v1
 
 import (
 	"github.com/chatmcp/mcprouter/model"
@@ -6,15 +6,15 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-type QueryServerRequest struct {
+type GetServerRequest struct {
 	Name       string `json:"name" validate:"required"`
 	AuthorName string `json:"author_name" validate:"required"`
 }
 
-func QueryServer(c echo.Context) error {
+func GetServer(c echo.Context) error {
 	ctx := api.GetAPIContext(c)
 
-	req := &QueryServerRequest{}
+	req := &GetServerRequest{}
 	if err := ctx.Valid(req); err != nil {
 		return ctx.RespErr(err)
 	}

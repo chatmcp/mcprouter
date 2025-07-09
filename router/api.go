@@ -13,11 +13,11 @@ func APIRoute(e *echo.Echo) {
 	apiv1beta := e.Group("/beta")
 	apiv1beta.POST("/add-server", beta.AddServer)
 	apiv1beta.POST("/update-server", beta.UpdateServer)
-	apiv1beta.POST("/query-server", beta.QueryServer)
 
 	apiv1 := e.Group("/v1")
 	apiv1.Use(api.CreateAPIV1Middleware())
 	apiv1.POST("/list-servers", v1.ListServers)
+	apiv1.POST("/get-server", v1.GetServer)
 	apiv1.POST("/list-tools", v1.ListTools)
 	apiv1.POST("/call-tool", v1.CallTool)
 }

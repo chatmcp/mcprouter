@@ -15,13 +15,3 @@ Authorization: Bearer {{apikey}}
   "server_url": "http://time-svc:9593/rest",
   "config_name": "time"
 }
-
-### query server
-POST {{baseUrl}}/query-server
-Content-Type: application/json
-Authorization: Bearer {{apikey}}
-
-{
-  "name": "time-mcp",
-  "author_name": "anthropic"
-}
