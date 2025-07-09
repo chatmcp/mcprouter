@@ -1,15 +1,23 @@
 package router
 
 import (
-	"github.com/chatmcp/mcprouter/handler/api"
+	"github.com/chatmcp/mcprouter/handler/api/beta"
+	v1 "github.com/chatmcp/mcprouter/handler/api/v1"
+	"github.com/chatmcp/mcprouter/service/api"
+
 	"github.com/labstack/echo/v4"
 )
 
 // APIRoute will create the routes for the http server
 func APIRoute(e *echo.Echo) {
-	apiv1 := e.Group("/v1")
+	apiv1beta := e.Group("/beta")
+	apiv1beta.POST("/add-server", beta.AddServer)
+	apiv1beta.POST("/update-server", beta.UpdateServer)
+	apiv1beta.POST("/query-server", beta.QueryServer)
 
-	apiv1.POST("/list-servers", api.ListServers)
-	apiv1.POST("/list-tools", api.ListTools)
-	apiv1.POST("/call-tool", api.CallTool)
+	apiv1 := e.Group("/v1")
+	apiv1.Use(api.CreateAPIV1Middleware())
+	apiv1.POST("/list-servers", v1.ListServers)
+	apiv1.POST("/list-tools", v1.ListTools)
+	apiv1.POST("/call-tool", v1.CallTool)
 }

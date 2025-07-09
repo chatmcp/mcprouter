@@ -13,6 +13,7 @@ type ServerLog struct {
 	ConnectionTime     time.Time `json:"connection_time" gorm:"column:connection_time;type:timestamptz"`
 	ClientName         string    `json:"client_name" gorm:"column:client_name"`
 	ClientVersion      string    `json:"client_version" gorm:"column:client_version"`
+	ClientURL          string    `json:"client_url" gorm:"column:client_url"`
 	RequestMethod      string    `json:"request_method" gorm:"column:request_method"`
 	RequestParams      string    `json:"request_params" gorm:"column:request_params"`
 	RequestID          string    `json:"request_id" gorm:"column:request_id"`
@@ -48,5 +49,5 @@ func CreateServerLog(sl *ServerLog) error {
 
 	fmt.Printf("save server log: %+v\n", sl)
 
-	return adb().Table(sl.TableName()).Create(sl).Error
+	return db().Table(sl.TableName()).Create(sl).Error
 }

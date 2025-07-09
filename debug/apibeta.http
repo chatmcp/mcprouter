@@ -1,0 +1,27 @@
+@baseUrl = http://127.0.0.1:8027/beta
+@apikey = xxx
+
+### add server
+POST {{baseUrl}}/add-server
+Content-Type: application/json
+Authorization: Bearer {{apikey}}
+
+{
+  "name": "time-mcp",
+  "author_name": "anthropic",
+  "title": "Time MCP Server",
+  "description": "A Model Context Protocol server that provides time and timezone conversion capabilities. This server enables LLMs to get current time information and perform timezone conversions using IANA timezone names, with automatic system timezone detection.",
+  "server_key": "time",
+  "server_url": "http://time-svc:9593/rest",
+  "config_name": "time"
+}
+
+### query server
+POST {{baseUrl}}/query-server
+Content-Type: application/json
+Authorization: Bearer {{apikey}}
+
+{
+  "name": "time-mcp",
+  "author_name": "anthropic"
+}

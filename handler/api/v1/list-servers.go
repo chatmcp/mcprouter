@@ -1,8 +1,8 @@
-package api
+package v1
 
 import (
+	"github.com/chatmcp/mcprouter/model"
 	"github.com/chatmcp/mcprouter/service/api"
-	"github.com/chatmcp/mcprouter/service/mcpserver"
 	"github.com/labstack/echo/v4"
 )
 
@@ -20,10 +20,12 @@ func ListServers(c echo.Context) error {
 		return ctx.RespErr(err)
 	}
 
-	servers, err := mcpserver.GetHostedServers(req.Page, req.Limit)
+	servers, err := model.GetServers(req.Page, req.Limit)
 	if err != nil {
 		return ctx.RespErr(err)
 	}
 
-	return ctx.RespData(servers)
+	return ctx.RespData(map[string]interface{}{
+		"servers": servers,
+	})
 }

@@ -23,7 +23,7 @@ func NewAPIServer() *APIServer {
 func (s *APIServer) Route(route func(e *echo.Echo)) {
 	s.server.Validator = NewValidator()
 	s.server.Use(middleware.Logger())
-	s.server.Use(createAPIMiddleware())
+	s.server.Use(CreateAPIMiddleware())
 
 	route(s.server)
 }

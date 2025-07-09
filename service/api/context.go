@@ -1,11 +1,8 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/chatmcp/mcprouter/service/jsonrpc"
@@ -35,68 +32,6 @@ type APIContext struct {
 	serverConfig *mcpserver.ServerConfig
 	clientInfo   *jsonrpc.ClientInfo
 	proxyInfo    *proxy.ProxyInfo
-}
-
-func createAPIMiddleware() echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			ctx := &APIContext{
-				Context: c,
-			}
-
-			header := c.Request().Header
-			req := c.Request()
-			path := req.URL.Path
-
-			authorization := header.Get("Authorization")
-			if authorization == "" {
-				return ctx.RespNoAuthMsg("no authorization header")
-			}
-
-			apikey := strings.TrimSpace(strings.ReplaceAll(authorization, "Bearer", ""))
-			if apikey == "" {
-				return ctx.RespNoAuthMsg("no authorization key")
-			}
-
-			serverKeyPaths := []string{
-				"/v1/list-tools",
-				"/v1/call-tool",
-			}
-
-			if slices.Contains(serverKeyPaths, path) {
-				serverConfig := mcpserver.GetServerConfig(apikey)
-				if serverConfig == nil {
-					return ctx.RespNoAuthMsg("invalid authorization key")
-				}
-
-				if strings.HasSuffix(serverConfig.ServerType, "_rest") {
-					if serverConfig.ServerURL == "" {
-						return ctx.RespNoAuthMsg("invalid server config: without server url")
-					}
-				} else {
-					if serverConfig.Command == "" {
-						return ctx.RespNoAuthMsg("invalid server config: without server command")
-					}
-				}
-
-				ctx.serverConfig = serverConfig
-			} else {
-				// todo: check access key
-			}
-
-			clientInfo := header.Get("X-Client-Info")
-			if clientInfo == "" {
-				return ctx.RespNoAuthMsg("no client info")
-			}
-
-			ctx.clientInfo = &jsonrpc.ClientInfo{}
-			if err := json.Unmarshal([]byte(clientInfo), ctx.clientInfo); err != nil {
-				return ctx.RespNoAuthMsg("invalid client info")
-			}
-
-			return next(ctx)
-		}
-	}
 }
 
 // GetAPIContext returns the APIContext from the echo.Context
@@ -154,18 +89,18 @@ func (c *APIContext) ServerURL() string {
 }
 
 // Connect connects to the mcp server
-func (c *APIContext) Connect() (mcpclient.Client, error) {
-	serverConfig := c.ServerConfig()
-	clientInfo := c.ClientInfo()
+func (c *APIContext) Connect(key string) (mcpclient.Client, error) {
+	serverConfig := mcpserver.GetServerConfig(key)
 
 	header := c.Request().Header
 
 	proxyInfo := &proxy.ProxyInfo{
-		ClientName:         clientInfo.Name,
-		ClientVersion:      clientInfo.Version,
+		ClientName:         header.Get("X-Title"),
+		ClientVersion:      header.Get("X-Version"),
+		ClientURL:          header.Get("HTTP-Referer"),
 		ServerUUID:         serverConfig.ServerUUID,
 		ServerKey:          serverConfig.ServerKey,
-		ServerConfigName:   serverConfig.ServerName,
+		ServerConfigName:   serverConfig.ServerConfigName,
 		ServerShareProcess: serverConfig.ShareProcess,
 		ServerType:         serverConfig.ServerType,
 		ServerURL:          serverConfig.ServerURL,
@@ -187,9 +122,7 @@ func (c *APIContext) Connect() (mcpclient.Client, error) {
 		ProtocolVersion: jsonrpc.JSONRPC_VERSION,
 		Capabilities: jsonrpc.ClientCapabilities{
 			Experimental: map[string]interface{}{
-				"auth": map[string]interface{}{
-					"flomo_api_url": "xxabc",
-				},
+				"auth": map[string]interface{}{},
 			},
 		},
 		ClientInfo: jsonrpc.ClientInfo{

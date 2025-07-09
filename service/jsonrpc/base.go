@@ -15,8 +15,9 @@ type BaseResponse struct {
 
 // ClientInfo is the info of the client.
 type ClientInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
+	Name    string `json:"name,omitempty"`
+	Version string `json:"version,omitempty"`
+	URL     string `json:"url,omitempty"`
 }
 
 // ClientCapabilities is the capabilities of the client.

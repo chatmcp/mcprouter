@@ -7,13 +7,7 @@ import (
 )
 
 func db() *gorm.DB {
-	name := viper.GetString("app.web_db_name")
-
-	return util.GetClient(name)
-}
-
-func adb() *gorm.DB {
-	name := viper.GetString("app.api_db_name")
+	name := viper.GetString("app.db_name")
 
 	return util.GetClient(name)
 }

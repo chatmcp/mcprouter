@@ -1,15 +1,7 @@
 @baseUrl = http://127.0.0.1:8025
 
-### sse
-GET {{baseUrl}}/sse/fetch
-
-### message
-POST {{baseUrl}}/messages?sessionid=0b9da74a-8b45-410d-ac71-3a691b2e0cc3
-Content-Type: application/json
-
-{
-	"message": "hello"
-}
+### stream
+GET {{baseUrl}}/time
 
 
 

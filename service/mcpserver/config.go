@@ -16,15 +16,16 @@ import (
 
 // ServerConfig is the config for the remote mcp server
 type ServerConfig struct {
-	ServerUUID   string `json:"server_uuid,omitempty" mapstructure:"server_uuid,omitempty"`
-	ServerName   string `json:"server_name,omitempty" mapstructure:"server_name,omitempty"`
-	ServerKey    string `json:"server_key,omitempty" mapstructure:"server_key,omitempty"`
-	Command      string `json:"command,omitempty" mapstructure:"command,omitempty"`
-	CommandHash  string `json:"command_hash,omitempty" mapstructure:"command_hash,omitempty"`
-	ShareProcess bool   `json:"share_process,omitempty" mapstructure:"share_process"`
-	ServerType   string `json:"server_type,omitempty" mapstructure:"server_type,omitempty"`
-	ServerURL    string `json:"server_url,omitempty" mapstructure:"server_url,omitempty"`
-	ServerParams string `json:"server_params,omitempty" mapstructure:"server_params,omitempty"`
+	ServerUUID       string `json:"server_uuid,omitempty" mapstructure:"server_uuid,omitempty"`
+	ServerName       string `json:"server_name,omitempty" mapstructure:"server_name,omitempty"`
+	ServerConfigName string `json:"server_config_name,omitempty" mapstructure:"server_config_name,omitempty"`
+	ServerKey        string `json:"server_key,omitempty" mapstructure:"server_key,omitempty"`
+	Command          string `json:"command,omitempty" mapstructure:"command,omitempty"`
+	CommandHash      string `json:"command_hash,omitempty" mapstructure:"command_hash,omitempty"`
+	ShareProcess     bool   `json:"share_process,omitempty" mapstructure:"share_process"`
+	ServerType       string `json:"server_type,omitempty" mapstructure:"server_type,omitempty"`
+	ServerURL        string `json:"server_url,omitempty" mapstructure:"server_url,omitempty"`
+	ServerParams     string `json:"server_params,omitempty" mapstructure:"server_params,omitempty"`
 }
 
 // GetServerConfig returns the config for the given key
@@ -56,26 +57,27 @@ func GetServerConfig(key string) *ServerConfig {
 
 // getDBServerConfig returns the config for the given key from the database
 func getDBServerConfig(key string) (*ServerConfig, error) {
-	serverkey, err := model.FindServerkeyByServerKey(key)
-	if err != nil {
-		return nil, err
-	}
+	// serverkey, err := model.FindServerkeyByServerKey(key)
+	// if err != nil {
+	// 	return nil, err
+	// }
 
-	project, err := model.FindProjectByUUID(serverkey.ServerUUID)
+	server, err := model.FindServerByKey(key)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ServerConfig{
-		ServerUUID:   serverkey.ServerUUID,
-		ServerName:   serverkey.ServerName,
-		ServerKey:    serverkey.ServerKey,
-		Command:      serverkey.ServerCommand,
-		CommandHash:  serverkey.ServerParams,
-		ShareProcess: true,
-		ServerType:   project.SSEProvider,
-		ServerURL:    project.SSEURL,
-		ServerParams: serverkey.ServerParams,
+		ServerUUID:       server.UUID,
+		ServerName:       server.Name,
+		ServerConfigName: server.ConfigName,
+		ServerKey:        server.ServerKey,
+		Command:          "",
+		CommandHash:      "",
+		ShareProcess:     true,
+		ServerType:       "rest",
+		ServerURL:        server.ServerURL,
+		ServerParams:     "",
 	}, nil
 }
 

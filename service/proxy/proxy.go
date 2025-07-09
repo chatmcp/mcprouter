@@ -16,6 +16,7 @@ type ProxyInfo struct {
 	ConnectionTime     time.Time   `json:"connection_time"`
 	ClientName         string      `json:"client_name"`
 	ClientVersion      string      `json:"client_version"`
+	ClientURL          string      `json:"client_url"`
 	RequestMethod      string      `json:"request_method"`
 	RequestParams      interface{} `json:"request_params"`
 	RequestID          interface{} `json:"request_id"`
@@ -51,6 +52,7 @@ func (p *ProxyInfo) ToServerLog() *model.ServerLog {
 		ConnectionTime:     p.ConnectionTime,
 		ClientName:         p.ClientName,
 		ClientVersion:      p.ClientVersion,
+		ClientURL:          p.ClientURL,
 		RequestMethod:      p.RequestMethod,
 		RequestTime:        p.RequestTime,
 		RequestFrom:        p.RequestFrom,

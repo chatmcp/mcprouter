@@ -12,4 +12,6 @@ func ProxyRoute(e *echo.Echo) {
 	e.POST("/messages", proxy.Messages)
 	// streamable http proxy
 	e.Any("/mcp/:key", proxy.MCP)
+
+	e.Any("/:key", proxy.MCP)
 }

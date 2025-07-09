@@ -1,4 +1,4 @@
-package api
+package v1
 
 import (
 	"encoding/json"
@@ -13,6 +13,7 @@ import (
 )
 
 type CallToolRequest struct {
+	Server    string                 `json:"server" validate:"required"`
 	Name      string                 `json:"name" validate:"required"`
 	Arguments map[string]interface{} `json:"arguments" validate:"required"`
 }
@@ -26,7 +27,7 @@ func CallTool(c echo.Context) error {
 		return ctx.RespErr(err)
 	}
 
-	client, err := ctx.Connect()
+	client, err := ctx.Connect(req.Server)
 	if err != nil {
 		return ctx.RespErr(err)
 	}

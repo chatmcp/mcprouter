@@ -1,37 +1,36 @@
 @baseUrl = http://127.0.0.1:8027
-# @baseUrl = https://rest.mcp.so
 @apiKey = xxx
-@serverKey = time
-@clientInfo = {"name": "mcp-playground", "version": "0.1.1"}
-@requestFrom = "mcp.so"
+@clientName = ChatMCP
+@clientURL = https://chatmcp.ai
 
 ### list servers
 POST {{baseUrl}}/v1/list-servers
 Content-Type: application/json
 Authorization: Bearer {{apiKey}}
-X-Client-Info: {{clientInfo}}
-X-Request-From: {{requestFrom}}
 
 {
   "page": 1,
   "limit": 30
 }
 
-### get server tools
+### list tools
 POST {{baseUrl}}/v1/list-tools
 Content-Type: application/json
-Authorization: Bearer {{serverKey}}
-X-Client-Info: {{clientInfo}}
-X-Request-From: {{requestFrom}}
+Authorization: Bearer {{apiKey}}
+
+{
+  "server": "time"
+}
 
 ### call tool
 POST {{baseUrl}}/v1/call-tool
 Content-Type: application/json
-Authorization: Bearer {{serverKey}}
-X-Client-Info: {{clientInfo}}
-X-Request-From: {{requestFrom}}
+Authorization: Bearer {{apiKey}}
+HTTP-Referer: {{clientURL}}
+X-Title: {{clientName}}
 
 {
+  "server": "time",
   "name": "get_current_time",
   "arguments": {
     "timezone": "Asia/Shanghai"

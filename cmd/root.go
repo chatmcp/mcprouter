@@ -37,25 +37,30 @@ func Init() error {
 
 	log.Println("config initialized")
 
-	dbs := []string{viper.GetString("app.web_db_name"), viper.GetString("app.api_db_name")}
+	dbNames := []string{viper.GetString("app.db_name")}
 	if viper.GetBool("app.use_db") {
-		for _, db := range dbs {
-			if db != "" {
-				if err := util.InitDBWithName(db); err != nil {
-					fmt.Printf("init db failed with name: %s, %v\n", db, err)
+		for _, name := range dbNames {
+			if name != "" {
+				if err := util.InitDBWithName(name); err != nil {
+					fmt.Printf("init db failed with name: %s, %v\n", name, err)
 					return err
 				}
-				log.Printf("db %s initialized", db)
+				log.Printf("db %s initialized", name)
 			}
 		}
 	}
 
-	if viper.GetBool("app.use_cache") && viper.GetString("app.cache_name") == "redis" {
-		if err := util.InitRedisWithName(viper.GetString("app.cache_name")); err != nil {
-			fmt.Printf("init redis failed with name: %s, %v\n", viper.GetString("app.cache_name"), err)
-			return err
+	cacheNames := []string{viper.GetString("app.cache_name")}
+	if viper.GetBool("app.use_cache") {
+		for _, name := range cacheNames {
+			if name != "" {
+				if err := util.InitRedisWithName(name); err != nil {
+					fmt.Printf("init redis failed with name: %s, %v\n", name, err)
+					return err
+				}
+				log.Printf("redis %s initialized", name)
+			}
 		}
-		log.Printf("redis %s initialized", viper.GetString("app.cache_name"))
 	}
 
 	return nil

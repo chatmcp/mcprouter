@@ -1,4 +1,4 @@
-package api
+package v1
 
 import (
 	"encoding/json"
@@ -10,11 +10,21 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+type ListToolsRequest struct {
+	Server string `json:"server" validate:"required"`
+}
+
 // ListTools is a handler for the list tools endpoint
 func ListTools(c echo.Context) error {
 	ctx := api.GetAPIContext(c)
 
-	client, err := ctx.Connect()
+	req := &ListToolsRequest{}
+
+	if err := ctx.Valid(req); err != nil {
+		return ctx.RespErr(err)
+	}
+
+	client, err := ctx.Connect(req.Server)
 	if err != nil {
 		return ctx.RespErr(err)
 	}
