@@ -11,6 +11,7 @@ import (
 // APIRoute will create the routes for the http server
 func APIRoute(e *echo.Echo) {
 	apiv1beta := e.Group("/beta")
+	apiv1beta.Use(api.CreateAPIBetaMiddleware())
 	apiv1beta.POST("/add-server", beta.AddServer)
 	apiv1beta.POST("/update-server", beta.UpdateServer)
 	apiv1beta.POST("/get-servers", beta.GetServers)
