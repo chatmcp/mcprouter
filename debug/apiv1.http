@@ -1,5 +1,4 @@
-# @baseUrl = http://127.0.0.1:8027/v1
-@baseUrl = https://api.chatmcp.ai/v1
+@baseUrl = http://127.0.0.1:8027/v1
 @apiKey = xxx
 @clientName = ChatMCP
 @clientURL = https://chatmcp.ai

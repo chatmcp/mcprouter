@@ -9,7 +9,7 @@ type Server struct {
 	UUID        string    `json:"-"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
-	DeletedAt   time.Time `json:"deleted_at"`
+	DeletedAt   time.Time `json:"-"`
 	Name        string    `json:"name"`
 	AuthorName  string    `json:"author_name"`
 	Title       string    `json:"title"`
@@ -18,6 +18,7 @@ type Server struct {
 	ServerKey   string    `json:"server_key"`
 	ServerURL   string    `json:"-"`
 	ConfigName  string    `json:"config_name"`
+	Tools       []*Tool   `json:"tools,omitempty" gorm:"-"`
 }
 
 func (s *Server) TableName() string {

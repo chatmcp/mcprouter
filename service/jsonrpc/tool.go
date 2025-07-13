@@ -24,7 +24,7 @@ type ListToolsResult struct {
 // CallToolParams is the params for the call tool method.
 type CallToolParams struct {
 	Name      string                 `json:"name"`
-	Arguments map[string]interface{} `json:"arguments,omitempty"`
+	Arguments map[string]interface{} `json:"arguments"`
 	Metadata  map[string]interface{} `json:"_meta,omitempty"`
 }
 
