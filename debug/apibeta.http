@@ -35,3 +35,27 @@ Authorization: Bearer {{apikey}}
   "name": "time-mcp",
   "author_name": "anthropic"
 }
+
+### save user
+POST {{baseUrl}}/save-user
+Content-Type: application/json
+Authorization: Bearer {{apikey}}
+
+{
+  "email": "test@test.com1",
+  "nickname": "test",
+  "avatar_url": "https://test.com/avatar.png",
+  "signin_type": "email",
+  "signin_provider": "google",
+  "signin_openid": "1234567890",
+  "signin_ip": "127.0.0.1"
+}
+
+### get user
+POST {{baseUrl}}/get-user
+Content-Type: application/json
+Authorization: Bearer {{apikey}}
+
+{
+  "email": "test@test.com"
+} 

@@ -25,5 +25,20 @@ CREATE TABLE IF NOT EXISTS tools (
     raw TEXT
 );
 
+CREATE TABLE IF NOT EXISTS users (
+    uuid VARCHAR(255) NOT NULL PRIMARY KEY,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP DEFAULT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL DEFAULT '',
+    nickname VARCHAR(50) NOT NULL DEFAULT '',
+    avatar_url VARCHAR(255) NOT NULL DEFAULT '',
+    signin_type VARCHAR(50) NOT NULL DEFAULT '',
+    signin_provider VARCHAR(50) NOT NULL DEFAULT '',
+    signin_openid VARCHAR(255) NOT NULL DEFAULT '',
+    signin_ip VARCHAR(255) NOT NULL DEFAULT ''
+);
+
 CREATE UNIQUE INDEX IF NOT EXISTS uni_server_name ON servers (name, author_name);
 CREATE UNIQUE INDEX IF NOT EXISTS uni_tool_name ON tools (name, server_key);
